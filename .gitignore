@@ -1,0 +1,10 @@
+# .gitignore
+
+# Byte-compiled files
+*.pyc
+
+# Cattery files
+*.cat
+
+# PyTorch model files
+*.pt
