@@ -2,10 +2,12 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Tuple
 from huggingface_hub import PyTorchModelHubMixin, hf_hub_download
-
 from depth_anything.blocks import FeatureFusionBlock, _make_scratch
 
+TensorPair = Tuple[torch.Tensor, torch.Tensor]
+NestedTensorStructure = Tuple[TensorPair, TensorPair, TensorPair, TensorPair]
 
 def _make_fusion_block(features, use_bn, size = None):
     return FeatureFusionBlock(
@@ -99,64 +101,69 @@ class DPTHead(nn.Module):
                 nn.ReLU(True),
                 nn.Identity(),
             )
-            
-    def forward(self, out_features, patch_h, patch_w):
+
+    def forward(self, out_features: NestedTensorStructure, patch_h: int, patch_w: int):
         out = []
-        for i, x in enumerate(out_features):
-            if self.use_clstoken:
-                x, cls_token = x[0], x[1]
-                readout = cls_token.unsqueeze(1).expand_as(x)
-                x = self.readout_projects[i](torch.cat((x, readout), -1))
-            else:
-                x = x[0]
-            
-            x = x.permute(0, 2, 1).reshape((x.shape[0], x.shape[-1], patch_h, patch_w))
-            
-            x = self.projects[i](x)
-            x = self.resize_layers[i](x)
-            
-            out.append(x)
-        
+        # Unrolled loop
+        x = out_features[0][0]
+        x = x.permute(0, 2, 1).reshape((x.shape[0], x.shape[-1], patch_h, patch_w))
+        x = self.projects[0](x)
+        x = self.resize_layers[0](x)
+        out.append(x)
+
+        x = out_features[1][0]
+        x = x.permute(0, 2, 1).reshape((x.shape[0], x.shape[-1], patch_h, patch_w))
+        x = self.projects[1](x)
+        x = self.resize_layers[1](x)
+        out.append(x)
+
+        x = out_features[2][0]
+        x = x.permute(0, 2, 1).reshape((x.shape[0], x.shape[-1], patch_h, patch_w))
+        x = self.projects[2](x)
+        x = self.resize_layers[2](x)
+        out.append(x)
+
+        x = out_features[3][0]
+        x = x.permute(0, 2, 1).reshape((x.shape[0], x.shape[-1], patch_h, patch_w))
+        x = self.projects[3](x)
+        x = self.resize_layers[3](x)
+        out.append(x)
+
         layer_1, layer_2, layer_3, layer_4 = out
-        
+
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         layer_2_rn = self.scratch.layer2_rn(layer_2)
         layer_3_rn = self.scratch.layer3_rn(layer_3)
         layer_4_rn = self.scratch.layer4_rn(layer_4)
-        
+
         path_4 = self.scratch.refinenet4(layer_4_rn, size=layer_3_rn.shape[2:])
         path_3 = self.scratch.refinenet3(path_4, layer_3_rn, size=layer_2_rn.shape[2:])
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn, size=layer_1_rn.shape[2:])
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
-        
+
         out = self.scratch.output_conv1(path_1)
         out = F.interpolate(out, (int(patch_h * 14), int(patch_w * 14)), mode="bilinear", align_corners=True)
         out = self.scratch.output_conv2(out)
-        
+
         return out
-        
-        
+
+
 class DPT_DINOv2(nn.Module):
     def __init__(self, encoder='vitl', features=256, out_channels=[256, 512, 1024, 1024], use_bn=False, use_clstoken=False, localhub=True):
         super(DPT_DINOv2, self).__init__()
-        
-        assert encoder in ['vits', 'vitb', 'vitl']
-        
-        # in case the Internet connection is not stable, please load the DINOv2 locally
         if localhub:
             self.pretrained = torch.hub.load('torchhub/facebookresearch_dinov2_main', 'dinov2_{:}14'.format(encoder), source='local', pretrained=False)
         else:
             self.pretrained = torch.hub.load('facebookresearch/dinov2', 'dinov2_{:}14'.format(encoder))
-        
+
         dim = self.pretrained.blocks[0].attn.qkv.in_features
-        
         self.depth_head = DPTHead(1, dim, features, use_bn, out_channels=out_channels, use_clstoken=use_clstoken)
-        
+
     def forward(self, x):
         h, w = x.shape[-2:]
-        
-        features = self.pretrained.get_intermediate_layers(x, 4, return_class_token=True)
-        
+
+        features = self.pretrained.get_intermediate_layers(x, [20, 21, 22, 23], return_class_token=True)
+
         patch_h, patch_w = h // 14, w // 14
 
         depth = self.depth_head(features, patch_h, patch_w)
@@ -180,8 +187,5 @@ if __name__ == '__main__':
         choices=["vits", "vitb", "vitl"],
     )
     args = parser.parse_args()
-    
     model = DepthAnything.from_pretrained("LiheYoung/depth_anything_{:}14".format(args.encoder))
-    
     print(model)
-    

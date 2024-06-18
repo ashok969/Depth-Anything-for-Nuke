@@ -1,5 +1,6 @@
+import torch
 import torch.nn as nn
-
+from typing import List, Optional
 
 def _make_scratch(in_shape, out_shape, groups=1, expand=False):
     scratch = nn.Module()
@@ -61,6 +62,9 @@ class ResidualConvUnit(nn.Module):
         if self.bn==True:
             self.bn1 = nn.BatchNorm2d(features)
             self.bn2 = nn.BatchNorm2d(features)
+        else:
+            self.bn1 = nn.Identity()
+            self.bn2 = nn.Identity()
 
         self.activation = activation
 
@@ -85,9 +89,6 @@ class ResidualConvUnit(nn.Module):
         out = self.conv2(out)
         if self.bn==True:
             out = self.bn2(out)
-
-        if self.groups > 1:
-            out = self.conv_merge(out)
 
         return self.skip_add.add(out, x)
 
@@ -123,30 +124,32 @@ class FeatureFusionBlock(nn.Module):
 
         self.size=size
 
-    def forward(self, *xs, size=None):
+    def forward(self, x1:torch.Tensor, x2:Optional[torch.Tensor] = None, size: Optional[List[int]] = None) -> torch.Tensor:
         """Forward pass.
 
         Returns:
             tensor: output
         """
-        output = xs[0]
+        output = x1
 
-        if len(xs) == 2:
-            res = self.resConfUnit1(xs[1])
+        if x2 is not None:
+            res = self.resConfUnit1(x2)
             output = self.skip_add.add(output, res)
 
         output = self.resConfUnit2(output)
 
         if (size is None) and (self.size is None):
-            modifier = {"scale_factor": 2}
+            output = nn.functional.interpolate(
+                output, scale_factor=2.0, mode="bilinear", align_corners=self.align_corners
+            )
         elif size is None:
-            modifier = {"size": self.size}
+            output = nn.functional.interpolate(
+                output, size=self.size, mode="bilinear", align_corners=self.align_corners
+            )
         else:
-            modifier = {"size": size}
-
-        output = nn.functional.interpolate(
-            output, **modifier, mode="bilinear", align_corners=self.align_corners
-        )
+            output = nn.functional.interpolate(
+                output, size=size, mode="bilinear", align_corners=self.align_corners
+            )
 
         output = self.out_conv(output)
 
