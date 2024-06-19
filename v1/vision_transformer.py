@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.utils.checkpoint
 from torch.nn.init import trunc_normal_
 
-from dinov2.layers import Mlp, PatchEmbed, SwiGLUFFNFused, Attention, Block
+from v1.layers import Mlp, PatchEmbed, SwiGLUFFNFused, Attention, Block
 
 
 logger = logging.getLogger("dinov2")
@@ -194,8 +194,7 @@ class DinoVisionTransformer(nn.Module):
         # see discussion at https://github.com/facebookresearch/dino/issues/8
         # DINOv2 with register modify the interpolate_offset from 0.1 to 0.0
         w0, h0 = w0 + self.interpolate_offset, h0 + self.interpolate_offset
-        # w0, h0 = w0 + 0.1, h0 + 0.1
-        
+
         sqrt_N = math.sqrt(N)
         sx, sy = float(w0) / sqrt_N, float(h0) / sqrt_N
         patch_pos_embed = nn.functional.interpolate(
@@ -203,9 +202,9 @@ class DinoVisionTransformer(nn.Module):
             scale_factor=(sx, sy),
             # (int(w0), int(h0)), # to solve the upsampling shape issue
             mode="bicubic",
-            antialias=self.interpolate_antialias
+            align_corners=False,
+            recompute_scale_factor=None,
         )
-        
         assert int(w0) == patch_pos_embed.shape[-2]
         assert int(h0) == patch_pos_embed.shape[-1]
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
@@ -271,7 +270,7 @@ class DinoVisionTransformer(nn.Module):
 
     def _get_intermediate_layers_not_chunked(self, x, n: List[int]):
         x = self.prepare_tokens_with_masks(x)
-        output, total_block_len = [], len(self.blocks)
+        output = []
         blocks_to_take = n
         for i, blk in enumerate(self.blocks):
             x = blk(x)
@@ -282,7 +281,7 @@ class DinoVisionTransformer(nn.Module):
 
     def _get_intermediate_layers_chunked(self, x, n: List[int]):
         x = self.prepare_tokens_with_masks(x)
-        output, i, total_block_len = [], 0, len(self.blocks[-1])
+        output, i = [], 0
         # If n is an int, take the n last blocks. If it's a list, take them
         blocks_to_take = n
         for block_chunk in self.blocks:

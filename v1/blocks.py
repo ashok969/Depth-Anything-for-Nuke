@@ -39,7 +39,7 @@ class ResidualConvUnit(nn.Module):
     """Residual convolution module.
     """
 
-    def __init__(self, features, activation, bn):
+    def __init__(self, features, activation, bn: bool):
         """Init.
 
         Args:
@@ -47,7 +47,7 @@ class ResidualConvUnit(nn.Module):
         """
         super().__init__()
 
-        self.bn = bn
+        self.bn: bool = bn
 
         self.groups=1
 
@@ -59,7 +59,7 @@ class ResidualConvUnit(nn.Module):
             features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups
         )
 
-        if self.bn==True:
+        if self.bn:
             self.bn1 = nn.BatchNorm2d(features)
             self.bn2 = nn.BatchNorm2d(features)
         else:
@@ -79,15 +79,14 @@ class ResidualConvUnit(nn.Module):
         Returns:
             tensor: output
         """
-        
         out = self.activation(x)
         out = self.conv1(out)
-        if self.bn==True:
+        if self.bn:
             out = self.bn1(out)
-       
+
         out = self.activation(out)
         out = self.conv2(out)
-        if self.bn==True:
+        if self.bn:
             out = self.bn2(out)
 
         return self.skip_add.add(out, x)
@@ -97,7 +96,7 @@ class FeatureFusionBlock(nn.Module):
     """Feature fusion block.
     """
 
-    def __init__(self, features, activation, deconv=False, bn=False, expand=False, align_corners=True, size=None):
+    def __init__(self, features, activation, deconv: bool = False, bn: bool = False, expand: bool = False, align_corners: bool = True, size=None):
         """Init.
 
         Args:
@@ -114,17 +113,17 @@ class FeatureFusionBlock(nn.Module):
         out_features = features
         if self.expand==True:
             out_features = features//2
-        
+
         self.out_conv = nn.Conv2d(features, out_features, kernel_size=1, stride=1, padding=0, bias=True, groups=1)
 
         self.resConfUnit1 = ResidualConvUnit(features, activation, bn)
         self.resConfUnit2 = ResidualConvUnit(features, activation, bn)
-        
+
         self.skip_add = nn.quantized.FloatFunctional()
 
         self.size=size
 
-    def forward(self, x1:torch.Tensor, x2:Optional[torch.Tensor] = None, size: Optional[List[int]] = None) -> torch.Tensor:
+    def forward(self, x1: torch.Tensor, x2: Optional[torch.Tensor] = None, size: Optional[List[int]] = None) -> torch.Tensor:
         """Forward pass.
 
         Returns:

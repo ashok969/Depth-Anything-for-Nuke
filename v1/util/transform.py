@@ -204,7 +204,6 @@ class Resize(object):
                 )
                 # sample["mask"] = sample["mask"].astype(bool)
 
-        # print(sample['image'].shape, sample['depth'].shape)
         return sample
 
 
