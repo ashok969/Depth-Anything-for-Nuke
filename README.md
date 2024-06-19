@@ -16,6 +16,8 @@ This tool is **natively integrated** within Nuke, providing a seamless and strea
 
 </div>
 
+https://github.com/rafaelperez/Depth-Anything-for-Nuke/assets/1684365/bad0e0d6-5468-408b-9f8c-ee9f186f7323
+
 ## Features
 
 - **Simple interface**.
