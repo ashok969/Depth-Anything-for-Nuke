@@ -1,11 +1,11 @@
 CatFileCreator {
  inputs 0
- torchScriptFile "\[python \{nuke.script_directory()\}]/Cattery/DepthAnything/DepthAnything_vitl.pt"
- catFile "\[python \{nuke.script_directory()\}]/Cattery/DepthAnything/DepthAnything_vitl.cat"
+ torchScriptFile "\[python \{nuke.script_directory()\}]/Cattery/DepthAnything/DepthAnythingV2_vitl.pt"
+ catFile "\[python \{nuke.script_directory()\}]/Cattery/DepthAnything/DepthAnythingV2_vitl.cat"
  channelsIn rgba.red,rgba.green,rgba.blue
  channelsOut rgba.alpha
- modelId DepthAnything
- name CatFileCreator_DepthAnything
+ modelId DepthAnythingV2
+ name CatFileCreator_DepthAnythingV2
  tile_color 0x1f00ffff
  xpos -260
  ypos -538

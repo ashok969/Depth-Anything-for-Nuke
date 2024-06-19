@@ -4,7 +4,6 @@ import os
 import cv2
 import torch
 import torch.nn.functional as F
-from huggingface_hub import hf_hub_download
 from torch import nn
 from torchvision.transforms import Compose
 
@@ -17,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 ENCODER = "vitl"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-BASE_PATH = "./nuke/Cattery/DepthAnything/"
+BASE_PATH = "./nuke/Cattery/DepthAnything"
 SAVE_MESSAGE = "TorchScript model saved to {0} - {1}MB"
 
 
@@ -82,12 +81,9 @@ def depth_anything_v2_model():
         },
     }
     model = DepthAnythingV2(**model_configs[ENCODER])
-    filepath = hf_hub_download(
-        repo_id="LiheYoung/Depth-Anything-V2-Checkpoints",
-        filename=f"depth_anything_v2_{ENCODER}.pth",
-        repo_type="model",
+    state_dict = torch.load(
+        "./checkpoints/depth_anything_v2_vitl.pth", map_location="cpu"
     )
-    state_dict = torch.load(filepath, map_location="cpu")
     model.load_state_dict(state_dict)
     model = model.half()
     return model.to(DEVICE).eval()
@@ -134,7 +130,6 @@ class DepthAnythingNuke(nn.Module):
             mode="bilinear",
             align_corners=False,
         )
-
         return depth[:, :, :h, :w]
 
 

@@ -69,6 +69,7 @@ class PatchEmbed(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         _, _, H, W = x.shape
+
         if x.dtype == torch.float32:
             x = x.half()
 
