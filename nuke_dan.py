@@ -50,6 +50,7 @@ def main_model():
         map_location="cpu",
     )
     model.load_state_dict(state_dict)
+    model = model.half()
 
     return model.to(DEVICE).eval()
 
@@ -67,6 +68,10 @@ class DepthAnythingNuke(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w = x.shape
+
+        if x.dtype == torch.float32:
+            x = x.half()
+
         n = [20, 21, 22, 23]  # n = 4 on the original code as 'blocks_to_take'
 
         # Padding
