@@ -42,10 +42,9 @@ class ResidualConvUnit(nn.Module):
 
         self.bn = bn
 
-        self.groups=1
+        self.groups = 1
 
         self.conv1 = nn.Conv2d(features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups)
-        
         self.conv2 = nn.Conv2d(features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups)
 
         if self.bn == True:
@@ -68,15 +67,14 @@ class ResidualConvUnit(nn.Module):
         Returns:
             tensor: output
         """
-        
         out = self.activation(x)
         out = self.conv1(out)
-        if self.bn == True:
+        if self.bn:
             out = self.bn1(out)
-       
+
         out = self.activation(out)
         out = self.conv2(out)
-        if self.bn == True:
+        if self.bn:
             out = self.bn2(out)
 
         # if self.groups > 1:
