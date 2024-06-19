@@ -203,7 +203,7 @@ class DinoVisionTransformer(nn.Module):
             # (int(w0), int(h0)), # to solve the upsampling shape issue
             mode="bicubic",
             align_corners=False,
-            recompute_scale_factor=None,
+            recompute_scale_factor=True,
         )
         assert int(w0) == patch_pos_embed.shape[-2]
         assert int(h0) == patch_pos_embed.shape[-1]
