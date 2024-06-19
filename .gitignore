@@ -8,3 +8,11 @@
 
 # PyTorch model files
 *.pt
+*.pth
+*.bin
+
+# VSCode settings
+.vscode/
+
+# Nuke AutoSave
+*.nk.autosave

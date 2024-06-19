@@ -3,8 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
-from huggingface_hub import PyTorchModelHubMixin, hf_hub_download
-from depth_anything.blocks import FeatureFusionBlock, _make_scratch
+from v1.blocks import FeatureFusionBlock, _make_scratch
+from v1.hubconf import _make_dinov2_model
+
 
 TensorPair = Tuple[torch.Tensor, torch.Tensor]
 NestedTensorStructure = Tuple[TensorPair, TensorPair, TensorPair, TensorPair]
@@ -24,10 +25,10 @@ def _make_fusion_block(features, use_bn, size = None):
 class DPTHead(nn.Module):
     def __init__(self, nclass, in_channels, features=256, use_bn=False, out_channels=[256, 512, 1024, 1024], use_clstoken=False):
         super(DPTHead, self).__init__()
-        
+
         self.nclass = nclass
         self.use_clstoken = use_clstoken
-        
+
         self.projects = nn.ModuleList([
             nn.Conv2d(
                 in_channels=in_channels,
@@ -37,7 +38,7 @@ class DPTHead(nn.Module):
                 padding=0,
             ) for out_channel in out_channels
         ])
-        
+
         self.resize_layers = nn.ModuleList([
             nn.ConvTranspose2d(
                 in_channels=out_channels[0],
@@ -59,7 +60,7 @@ class DPTHead(nn.Module):
                 stride=2,
                 padding=1)
         ])
-        
+
         if use_clstoken:
             self.readout_projects = nn.ModuleList()
             for _ in range(len(self.projects)):
@@ -67,7 +68,7 @@ class DPTHead(nn.Module):
                     nn.Sequential(
                         nn.Linear(2 * in_channels, in_channels),
                         nn.GELU()))
-        
+
         self.scratch = _make_scratch(
             out_channels,
             features,
@@ -76,7 +77,7 @@ class DPTHead(nn.Module):
         )
 
         self.scratch.stem_transpose = None
-        
+
         self.scratch.refinenet1 = _make_fusion_block(features, use_bn)
         self.scratch.refinenet2 = _make_fusion_block(features, use_bn)
         self.scratch.refinenet3 = _make_fusion_block(features, use_bn)
@@ -84,7 +85,7 @@ class DPTHead(nn.Module):
 
         head_features_1 = features
         head_features_2 = 32
-        
+
         if nclass > 1:
             self.scratch.output_conv = nn.Sequential(
                 nn.Conv2d(head_features_1, head_features_1, kernel_size=3, stride=1, padding=1),
@@ -93,7 +94,7 @@ class DPTHead(nn.Module):
             )
         else:
             self.scratch.output_conv1 = nn.Conv2d(head_features_1, head_features_1 // 2, kernel_size=3, stride=1, padding=1)
-            
+
             self.scratch.output_conv2 = nn.Sequential(
                 nn.Conv2d(head_features_1 // 2, head_features_2, kernel_size=3, stride=1, padding=1),
                 nn.ReLU(True),
@@ -149,12 +150,9 @@ class DPTHead(nn.Module):
 
 
 class DPT_DINOv2(nn.Module):
-    def __init__(self, encoder='vitl', features=256, out_channels=[256, 512, 1024, 1024], use_bn=False, use_clstoken=False, localhub=True):
+    def __init__(self, encoder='vitl', features=256, out_channels=[256, 512, 1024, 1024], use_bn=False, use_clstoken=False):
         super(DPT_DINOv2, self).__init__()
-        if localhub:
-            self.pretrained = torch.hub.load('torchhub/facebookresearch_dinov2_main', 'dinov2_{:}14'.format(encoder), source='local', pretrained=False)
-        else:
-            self.pretrained = torch.hub.load('facebookresearch/dinov2', 'dinov2_{:}14'.format(encoder))
+        self.pretrained = _make_dinov2_model(arch_name="vit_large", patch_size=14, pretrained=False)
 
         dim = self.pretrained.blocks[0].attn.qkv.in_features
         self.depth_head = DPTHead(1, dim, features, use_bn, out_channels=out_channels, use_clstoken=use_clstoken)
@@ -171,21 +169,3 @@ class DPT_DINOv2(nn.Module):
         depth = F.relu(depth)
 
         return depth.squeeze(1)
-
-
-class DepthAnything(DPT_DINOv2, PyTorchModelHubMixin):
-    def __init__(self, config):
-        super().__init__(**config)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--encoder",
-        default="vits",
-        type=str,
-        choices=["vits", "vitb", "vitl"],
-    )
-    args = parser.parse_args()
-    model = DepthAnything.from_pretrained("LiheYoung/depth_anything_{:}14".format(args.encoder))
-    print(model)
