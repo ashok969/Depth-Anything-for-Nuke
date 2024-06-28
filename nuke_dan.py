@@ -1,24 +1,28 @@
+"""Export the DepthAnything model for Nuke."""
+
 import logging
 import os
 
 import cv2
 import torch
 import torch.nn.functional as F
+from packaging import version
 from torch import nn
 from torchvision.transforms import Compose
-
 from v1.dpt import DPT_DINOv2
 from v1.util.transform import NormalizeImage, PrepareForNet, Resize
 from v2.dpt import DepthAnythingV2
 
+
 logging.basicConfig(level=logging.INFO)
 
 LOGGER = logging.getLogger(__name__)
-ENCODER = "vitl"
+ENCODER = "vits"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BASE_PATH = "./nuke/Cattery/DepthAnything"
 SAVE_MESSAGE = "TorchScript model saved to {0} - {1}MB"
-
+IS_TORCH_1_12 = version.parse(torch.__version__) >= version.parse("1.12.0")
+FP16 = False
 
 transform = Compose(
     [
@@ -38,6 +42,11 @@ transform = Compose(
 
 
 def depth_anything_v1_model():
+    """Load the DepthAnythingV1 model.
+
+    Returns
+        torch.nn.Module: The DepthAnythingV1 model
+    """
     model = DPT_DINOv2(
         encoder="vitl",
         features=256,
@@ -53,11 +62,23 @@ def depth_anything_v1_model():
         map_location="cpu",
     )
     model.load_state_dict(state_dict)
-    model = model.half()
+    if FP16:
+        model = model.half()
+
     return model.to(DEVICE).eval()
 
 
 def depth_anything_v2_model():
+    """Load the DepthAnythingV2 model.
+
+    Models available for download on the Hugging Face Hub:
+    https://huggingface.co/depth-anything/Depth-Anything-V2-Small
+    https://huggingface.co/depth-anything/Depth-Anything-V2-Base
+    https://huggingface.co/depth-anything/Depth-Anything-V2-Large
+
+    Returns
+        torch.nn.Module: The DepthAnythingV1 model
+    """
     model_configs = {
         "vits": {
             "encoder": "vits",
@@ -82,17 +103,26 @@ def depth_anything_v2_model():
     }
     model = DepthAnythingV2(**model_configs[ENCODER])
     state_dict = torch.load(
-        "./checkpoints/depth_anything_v2_vitl.pth", map_location="cpu"
+        f"./checkpoints/depth_anything_v2_{ENCODER}.pth",
+        map_location="cpu",
     )
     model.load_state_dict(state_dict)
-    model = model.half()
+    if FP16:
+        model = model.half()
+
     return model.to(DEVICE).eval()
 
 
 class DepthAnythingNuke(nn.Module):
-    """DepthAnything model for Nuke."""
+    """DepthAnything model for Nuke.
 
-    def __init__(self, encoder, decoder, n) -> None:
+    Args:
+        encoder (torch.nn.Module): The encoder model.
+        decoder (torch.nn.Module): The decoder model.
+        n (list): The list of n values.
+    """
+
+    def __init__(self, encoder, decoder, n, fp16=True) -> None:
         """Initialize the model."""
         super().__init__()
         self.mean = [0.485, 0.456, 0.406]
@@ -100,11 +130,12 @@ class DepthAnythingNuke(nn.Module):
         self.n = n
         self.encoder = encoder
         self.decoder = decoder
+        self.fp16 = fp16
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w = x.shape
 
-        if x.dtype == torch.float32:
+        if self.fp16 and x.dtype == torch.float32:
             x = x.half()
 
         # Padding
@@ -134,16 +165,32 @@ class DepthAnythingNuke(nn.Module):
 
 
 def file_size(file_path):
+    """Get the file size in MB.
+
+    Args:
+        file_path (str): The path to the file.
+
+    Returns:
+        int: The file size in MB.
+    """
     size_in_bytes = os.path.getsize(file_path)
     return int(size_in_bytes / (1024 * 1024))
 
 
 def test_model(model, image_path):
-    LOGGER.info(f"Testing model with image: {image_path}")
+    """Test the model with an image.
+
+    Args:
+        model (torch.nn.Module): The model to test.
+        image_path (str): The path to the image.
+    """
+    LOGGER.info("Testing model with image: %s", image_path)
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0
     image = transform({"image": image})["image"]
     image = torch.from_numpy(image).unsqueeze(0).to(DEVICE)
+    if FP16:
+        image = image.half()
 
     depth = model(image)
     depth = depth.detach().cpu().numpy().squeeze()
@@ -151,12 +198,17 @@ def test_model(model, image_path):
     depth = depth.astype("uint8")
     depth = cv2.applyColorMap(depth, cv2.COLORMAP_JET)
 
-    dest = "depth_v2.png"
+    dest = f"depth_v2_{os.urandom(2).hex()}.png"
     cv2.imwrite(dest, depth)
-    LOGGER.info(f"Depth image saved to {dest}")
+    LOGGER.info("Depth image saved to %s", dest)
 
 
 def trace_depth_anything_v1():
+    """Trace the DepthAnythingV1 model.
+
+    Returns
+        torch.jit.ScriptModule: The traced model.
+    """
     with torch.no_grad():
         depth_anything_model = depth_anything_v1_model().eval()
 
@@ -164,19 +216,24 @@ def trace_depth_anything_v1():
         decoder_model = depth_anything_model.depth_head
         n = [20, 21, 22, 23]  # n = 4 on the original code as 'blocks_to_take'
 
-        model = DepthAnythingNuke(encoder_model, decoder_model, n)
+        model = DepthAnythingNuke(encoder_model, decoder_model, n, fp16=FP16)
         model_traced = torch.jit.script(model)
 
-        # Uncomment for PyTorch 1.12
-        # model_traced = torch.jit.optimize_for_inference(model_traced)
+        if IS_TORCH_1_12:
+            model_traced = torch.jit.optimize_for_inference(model_traced)
 
-        DESTINATION = f"{BASE_PATH}/DepthAnything_vitl.pt"
+        DESTINATION = f"{BASE_PATH}/DepthAnything_{ENCODER}.pt"
         model_traced.save(DESTINATION)
         LOGGER.info(SAVE_MESSAGE.format(DESTINATION, file_size(DESTINATION)))
         return model_traced
 
 
 def trace_depth_anything_v2():
+    """Trace the DepthAnythingV2 model.
+
+    Returns
+        torch.jit.ScriptModule: The traced model.
+    """
     with torch.no_grad():
         depth_anything_model = depth_anything_v2_model()
 
@@ -189,13 +246,13 @@ def trace_depth_anything_v2():
             "vitg": [9, 19, 29, 39],
         }
 
-        model = DepthAnythingNuke(encoder_model, decoder_model, n["vitl"])
+        model = DepthAnythingNuke(encoder_model, decoder_model, n[ENCODER], fp16=FP16)
         model_traced = torch.jit.script(model)
 
-        # Uncomment for PyTorch 1.12
-        # model_traced = torch.jit.optimize_for_inference(model_traced)
+        if IS_TORCH_1_12:
+            model_traced = torch.jit.optimize_for_inference(model_traced)
 
-        DESTINATION = f"{BASE_PATH}/DepthAnythingV2_vitl.pt"
+        DESTINATION = f"{BASE_PATH}/DepthAnythingV2_{ENCODER}.pt"
         model_traced.save(DESTINATION)
         LOGGER.info(SAVE_MESSAGE.format(DESTINATION, file_size(DESTINATION)))
         return model_traced
