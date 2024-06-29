@@ -16,3 +16,6 @@
 
 # Nuke AutoSave
 *.nk.autosave
+
+# Build files
+.build/
