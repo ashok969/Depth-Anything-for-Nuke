@@ -1,7 +1,9 @@
 """Export the DepthAnything model for Nuke."""
 
+import argparse
 import logging
 import os
+from typing import List
 
 import cv2
 import torch
@@ -13,16 +15,56 @@ from v1.dpt import DPT_DINOv2
 from v1.util.transform import NormalizeImage, PrepareForNet, Resize
 from v2.dpt import DepthAnythingV2
 
-
 logging.basicConfig(level=logging.INFO)
 
 LOGGER = logging.getLogger(__name__)
-ENCODER = "vits"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BASE_PATH = "./nuke/Cattery/DepthAnything"
-SAVE_MESSAGE = "TorchScript model saved to {0} - {1}MB"
 IS_TORCH_1_12 = version.parse(torch.__version__) >= version.parse("1.12.0")
-FP16 = False
+MODEL_CONFIG = {
+    "v1_vits": {
+        "encoder": "vits",
+        "features": 64,
+        "out_channels": [48, 96, 192, 384],
+        "url": "https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vits14.pth",
+    },
+    "v1_vitb": {
+        "encoder": "vitb",
+        "features": 128,
+        "out_channels": [96, 192, 384, 768],
+        "url": "https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vitb14.pth",
+    },
+    "v1_vitl": {
+        "encoder": "vitl",
+        "features": 256,
+        "out_channels": [256, 512, 1024, 1024],
+        "url": "https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vitl14.pth",
+    },
+    "v2_vits": {
+        "encoder": "vits",
+        "features": 64,
+        "out_channels": [48, 96, 192, 384],
+        "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Small/resolve/main/depth_anything_v2_vits.pth",
+    },
+    "v2_vitb": {
+        "encoder": "vitb",
+        "features": 128,
+        "out_channels": [96, 192, 384, 768],
+        "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base/resolve/main/depth_anything_v2_vitb.pth",
+    },
+    "v2_vitl": {
+        "encoder": "vitl",
+        "features": 256,
+        "out_channels": [256, 512, 1024, 1024],
+        "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth",
+    },
+    "v2_vitg": {
+        "encoder": "vitg",
+        "features": 384,
+        "out_channels": [1536, 1536, 1536, 1536],
+        "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Giant/resolve/main/depth_anything_v2_vitg.pth",
+    },  # temporarily offline
+}
 
 transform = Compose(
     [
@@ -37,121 +79,127 @@ transform = Compose(
         ),
         NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         PrepareForNet(),
-    ],
+    ]
 )
 
 
-def depth_anything_v1_model():
+def build_depth_anything_model(version: str, model_size: str, half=False):
     """Load the DepthAnythingV1 model.
 
-    Returns
-        torch.nn.Module: The DepthAnythingV1 model
-    """
-    model = DPT_DINOv2(
-        encoder="vitl",
-        features=256,
-        out_channels=[256, 512, 1024, 1024],
-        use_bn=False,
-        use_clstoken=False,
-    )
+    Models will be downloaded from the Hugging Face Hub
+    https://huggingface.co/spaces/LiheYoung/Depth-Anything/tree/main
 
-    # Download the model from the Hugging Face Hub
-    # https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vitl14.pth
-    state_dict = torch.load(
-        "./checkpoints/depth_anything_vitl14.pth",
-        map_location="cpu",
-    )
-    model.load_state_dict(state_dict)
-    if FP16:
-        model = model.half()
-
-    return model.to(DEVICE).eval()
-
-
-def depth_anything_v2_model():
-    """Load the DepthAnythingV2 model.
-
-    Models available for download on the Hugging Face Hub:
-    https://huggingface.co/depth-anything/Depth-Anything-V2-Small
-    https://huggingface.co/depth-anything/Depth-Anything-V2-Base
-    https://huggingface.co/depth-anything/Depth-Anything-V2-Large
+    Args:
+        model_size: The depth_anything model_size (vits, vitb, vitl).
+        half: Whether to use half precision.
 
     Returns
         torch.nn.Module: The DepthAnythingV1 model
     """
-    model_configs = {
-        "vits": {
-            "encoder": "vits",
-            "features": 64,
-            "out_channels": [48, 96, 192, 384],
-        },
-        "vitb": {
-            "encoder": "vitb",
-            "features": 128,
-            "out_channels": [96, 192, 384, 768],
-        },
-        "vitl": {
-            "encoder": "vitl",
-            "features": 256,
-            "out_channels": [256, 512, 1024, 1024],
-        },
-        "vitg": {
-            "encoder": "vitg",
-            "features": 384,
-            "out_channels": [1536, 1536, 1536, 1536],
-        },
-    }
-    model = DepthAnythingV2(**model_configs[ENCODER])
-    state_dict = torch.load(
-        f"./checkpoints/depth_anything_v2_{ENCODER}.pth",
-        map_location="cpu",
-    )
-    model.load_state_dict(state_dict)
-    if FP16:
-        model = model.half()
+    model_key = f"{version}_{model_size}"
+    if model_key not in MODEL_CONFIG:
+        raise ValueError(f"Invalid version or model size: {model_key}")
 
+    model_config = MODEL_CONFIG[model_key].copy()
+    url = model_config.pop("url")
+    model_file = os.path.basename(url)
+
+    if not os.path.exists(model_file):
+        LOGGER.info("Downloading model file: %s", model_file)
+        torch.hub.download_url_to_file(url, model_file)
+
+    if version == "v1":
+        model = DPT_DINOv2(**model_config, use_bn=False, use_clstoken=False)
+    elif version == "v2":
+        model = DepthAnythingV2(**model_config)
+
+    state_dict = torch.load(model_file, map_location="cpu")
+    model.load_state_dict(state_dict)
+
+    if half:
+        model = model.half()
     return model.to(DEVICE).eval()
+
+
+def file_size(file_path):
+    """Get the file size in MB."""
+    size_in_bytes = os.path.getsize(file_path)
+    return int(size_in_bytes / (1024 * 1024))
+
+
+def test_model(image_path, model, version: str, model_size: str, half=False):
+    """Test the model with an image.
+
+    Args:
+        model: The model to test.
+        image_path: The path to the image.
+    """
+    LOGGER.info("Testing model with image: %s", image_path)
+
+    image = cv2.imread(image_path)
+    if image is None:
+        raise FileNotFoundError(f"Could not read image file: {image_path}")
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0
+    image = transform({"image": image})["image"]
+    image = torch.from_numpy(image).unsqueeze(0).to(DEVICE)
+
+    if half:
+        image = image.half()
+
+    with torch.no_grad():
+        depth = model(image)
+
+    # Normalize and convert to uint8 for visualization
+    depth = depth.detach().cpu().numpy().squeeze()
+    depth = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
+    depth = depth.astype("uint8")
+    depth = cv2.applyColorMap(depth, cv2.COLORMAP_JET)
+
+    dest = f"depth_{version}_{model_size}_{'fp16' if half else 'fp32'}_{os.urandom(2).hex()}.png"
+    cv2.imwrite(dest, depth)
+    LOGGER.info("Test image saved to %s", dest)
 
 
 class DepthAnythingNuke(nn.Module):
     """DepthAnything model for Nuke.
 
     Args:
-        encoder (torch.nn.Module): The encoder model.
-        decoder (torch.nn.Module): The decoder model.
-        n (list): The list of n values.
+        encoder: The encoder model.
+        decoder: The decoder model.
+        n: Depth Anything window list parameter.
     """
 
-    def __init__(self, encoder, decoder, n, fp16=True) -> None:
+    def __init__(self, encoder, decoder, n: List[int], half=False) -> None:
         """Initialize the model."""
         super().__init__()
-        self.mean = [0.485, 0.456, 0.406]
-        self.std = [0.229, 0.224, 0.225]
-        self.n = n
         self.encoder = encoder
         self.decoder = decoder
-        self.fp16 = fp16
+        self.n = n
+        self.half = half
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        n = self.n
         b, c, h, w = x.shape
-
-        if self.fp16 and x.dtype == torch.float32:
-            x = x.half()
+        device = torch.device("cuda") if x.is_cuda else torch.device("cpu")
 
         # Padding
         padding_factor = 14
         pad_h = ((h - 1) // padding_factor + 1) * padding_factor
         pad_w = ((w - 1) // padding_factor + 1) * padding_factor
         pad_dims = (0, pad_w - w, 0, pad_h - h)
-        x = torch.nn.functional.pad(x, pad_dims)
+        x = F.pad(x, pad_dims)
+
+        std = torch.tensor([0.229, 0.224, 0.225], dtype=x.dtype, device=device).view(
+            1, 3, 1, 1
+        )
+        mean = torch.tensor([0.485, 0.456, 0.406], dtype=x.dtype, device=device).view(
+            1, 3, 1, 1
+        )
+        x = (x - mean) / std
 
         patch_h, patch_w = x.shape[-2] // 14, x.shape[-1] // 14
-        features = self.encoder.get_intermediate_layers(
-            x,
-            self.n,
-            return_class_token=True,
-        )
-
+        features = self.encoder.get_intermediate_layers(x, n, return_class_token=True)
         depth = self.decoder(features, patch_h, patch_w)
         depth = F.relu(depth)
         depth = depth.squeeze(1)
@@ -164,102 +212,64 @@ class DepthAnythingNuke(nn.Module):
         return depth[:, :, :h, :w]
 
 
-def file_size(file_path):
-    """Get the file size in MB.
-
-    Args:
-        file_path (str): The path to the file.
-
-    Returns:
-        int: The file size in MB.
-    """
-    size_in_bytes = os.path.getsize(file_path)
-    return int(size_in_bytes / (1024 * 1024))
-
-
-def test_model(model, image_path):
-    """Test the model with an image.
-
-    Args:
-        model (torch.nn.Module): The model to test.
-        image_path (str): The path to the image.
-    """
-    LOGGER.info("Testing model with image: %s", image_path)
-    image = cv2.imread(image_path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0
-    image = transform({"image": image})["image"]
-    image = torch.from_numpy(image).unsqueeze(0).to(DEVICE)
-    if FP16:
-        image = image.half()
-
-    depth = model(image)
-    depth = depth.detach().cpu().numpy().squeeze()
-    depth = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
-    depth = depth.astype("uint8")
-    depth = cv2.applyColorMap(depth, cv2.COLORMAP_JET)
-
-    dest = f"depth_v2_{os.urandom(2).hex()}.png"
-    cv2.imwrite(dest, depth)
-    LOGGER.info("Depth image saved to %s", dest)
-
-
-def trace_depth_anything_v1():
-    """Trace the DepthAnythingV1 model.
-
-    Returns
-        torch.jit.ScriptModule: The traced model.
-    """
-    with torch.no_grad():
-        depth_anything_model = depth_anything_v1_model().eval()
-
-        encoder_model = depth_anything_model.pretrained
-        decoder_model = depth_anything_model.depth_head
-        n = [20, 21, 22, 23]  # n = 4 on the original code as 'blocks_to_take'
-
-        model = DepthAnythingNuke(encoder_model, decoder_model, n, fp16=FP16)
-        model_traced = torch.jit.script(model)
-
-        if IS_TORCH_1_12:
-            model_traced = torch.jit.optimize_for_inference(model_traced)
-
-        DESTINATION = f"{BASE_PATH}/DepthAnything_{ENCODER}.pt"
-        model_traced.save(DESTINATION)
-        LOGGER.info(SAVE_MESSAGE.format(DESTINATION, file_size(DESTINATION)))
-        return model_traced
-
-
-def trace_depth_anything_v2():
+def trace_depth_anything(version: str, model_size: str, half=False):
     """Trace the DepthAnythingV2 model.
 
     Returns
         torch.jit.ScriptModule: The traced model.
     """
-    with torch.no_grad():
-        depth_anything_model = depth_anything_v2_model()
+    LOGGER.info(
+        "Tracing DepthAnything: %s_%s %s", version, model_size, "(half)" if half else ""
+    )
 
-        encoder_model = depth_anything_model.pretrained
-        decoder_model = depth_anything_model.depth_head
-        n = {
-            "vits": [2, 5, 8, 11],
-            "vitb": [2, 5, 8, 11],
-            "vitl": [4, 11, 17, 23],
-            "vitg": [9, 19, 29, 39],
-        }
+    depth_anything_model = build_depth_anything_model(version, model_size, half)
 
-        model = DepthAnythingNuke(encoder_model, decoder_model, n[ENCODER], fp16=FP16)
-        model_traced = torch.jit.script(model)
+    model = DepthAnythingNuke(
+        encoder=depth_anything_model.pretrained,
+        decoder=depth_anything_model.depth_head,
+        n=depth_anything_model.n,
+        half=half,
+    )
+    model_traced = torch.jit.script(model)
 
-        if IS_TORCH_1_12:
-            model_traced = torch.jit.optimize_for_inference(model_traced)
+    if IS_TORCH_1_12:
+        model_traced = torch.jit.optimize_for_inference(model_traced)
 
-        DESTINATION = f"{BASE_PATH}/DepthAnythingV2_{ENCODER}.pt"
-        model_traced.save(DESTINATION)
-        LOGGER.info(SAVE_MESSAGE.format(DESTINATION, file_size(DESTINATION)))
-        return model_traced
+    DEST = (
+        f"{BASE_PATH}/DepthAnything_{version}_{model_size}{'_half' if half else ''}.pt"
+    )
+    model_traced.save(DEST)
+    LOGGER.info("TorchScript model saved to %s (%sMB)", DEST, file_size(DEST))
+    return model_traced
 
 
 if __name__ == "__main__":
-    # model = depth_anything_v2_model()
-    # model = trace_depth_anything_v1()
-    model = trace_depth_anything_v2()
-    test_model(model, "demo1.png")
+    parser = argparse.ArgumentParser(
+        description="Export the DepthAnything model for Nuke"
+    )
+    parser.add_argument(
+        "--version",
+        type=str,
+        choices=["v1", "v2"],
+        default="v2",
+        help="DepthAnything version",
+    )
+    parser.add_argument(
+        "--model-size",
+        type=str,
+        choices=["vits", "vitb", "vitl"],
+        default="vits",
+        help="Model size",
+    )
+    parser.add_argument(
+        "--half", action="store_true", default=False, help="Use half precision"
+    )
+    parser.add_argument(
+        "--test-image", type=str, default="demo.png", help="Path to test image"
+    )
+
+    args = parser.parse_args()
+
+    # model = depth_anything_model(args.version, args.model_size, args.half)
+    model = trace_depth_anything(args.version, args.model_size, args.half)
+    test_model(args.test_image, model, args.version, args.model_size, args.half)

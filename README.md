@@ -20,8 +20,21 @@ https://github.com/rafaelperez/Depth-Anything-for-Nuke/assets/1684365/bad0e0d6-5
 
 ## Features
 
-- **Simple interface**.
-- **Efficient memory usage** - the high-quality model fits on most 8GB graphics cards.
+- **Simple interface**: No 3D tracking setup required
+- **High detail**: Captures relatively difficult edges
+- **Efficient memory usage**: Runs on most 6GB graphics cards
+- **CPU compatible**: Can be batched to CPU render farms
+
+## My other Nuke gizmos
+You maybe be interested on also Nuke Cattery nodes or gizmos. Feel free to check them out:
+
+### AI-powered nodes
+- **[RIFE for Nuke](https://github.com/rafaelperez/RIFE-for-Nuke)**: Advanced AI-driven retiming and optical flow
+- **[SegmentAnything for Nuke](https://github.com/rafaelperez/Segment-Anything-for-Nuke)**: Cutting-edge AI object segmentation
+- **[VITMatte for Nuke](https://github.com/rafaelperez/ViTMatte-for-Nuke):** AI-powered natural edge detail extraction
+
+### Advanced effects
+- **[Guided Blur/Refine Edge](https://www.nukepedia.com/gizmos/filter/guided-blur-refine-edge):** High-speed edge detail extraction using BlinkScript
 
 ## Compatibility
 

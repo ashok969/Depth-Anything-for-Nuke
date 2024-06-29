@@ -11,7 +11,6 @@
 from typing import Callable, Optional, Tuple, Union
 
 from torch import Tensor
-import torch
 import torch.nn as nn
 
 
