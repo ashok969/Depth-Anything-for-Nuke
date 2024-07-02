@@ -152,16 +152,21 @@ class DPTHead(nn.Module):
 class DPT_DINOv2(nn.Module):
     def __init__(self, encoder='vitl', features=256, out_channels=[256, 512, 1024, 1024], use_bn=False, use_clstoken=False):
         super(DPT_DINOv2, self).__init__()
-        self.pretrained = _make_dinov2_model(arch_name="vit_large", patch_size=14, pretrained=False)
-
+        self.encoders = {
+            'vits': ("vit_small", (8, 9, 10, 11)),
+            'vitb': ("vit_base", (8, 9, 10, 11)), 
+            'vitl': ("vit_large", (20, 21, 22, 23)), 
+        }
+        self.arch_name, self.n = self.encoders[encoder]
+        self.pretrained = _make_dinov2_model(arch_name=self.arch_name, patch_size=14, pretrained=False)
         dim = self.pretrained.blocks[0].attn.qkv.in_features
         self.depth_head = DPTHead(1, dim, features, use_bn, out_channels=out_channels, use_clstoken=use_clstoken)
 
     def forward(self, x):
         h, w = x.shape[-2:]
+        n = self.n
 
-        features = self.pretrained.get_intermediate_layers(x, [20, 21, 22, 23], return_class_token=True)
-
+        features = self.pretrained.get_intermediate_layers(x, n, return_class_token=True)
         patch_h, patch_w = h // 14, w // 14
 
         depth = self.depth_head(features, patch_h, patch_w)

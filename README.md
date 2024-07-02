@@ -16,12 +16,25 @@ This tool is **natively integrated** within Nuke, providing a seamless and strea
 
 </div>
 
-https://github.com/rafaelperez/Depth-Anything-for-Nuke/assets/1684365/bad0e0d6-5468-408b-9f8c-ee9f186f7323
+https://github.com/rafaelperez/Depth-Anything-for-Nuke/assets/1684365/e3bc47eb-a2a1-421e-9f99-b82432cdfff7
 
 ## Features
 
-- **Simple interface**.
-- **Efficient memory usage** - the high-quality model fits on most 8GB graphics cards.
+- **Simple interface**: No 3D tracking setup required
+- **High detail**: Captures relatively difficult edges
+- **Efficient memory usage**: Runs on most 6GB graphics cards
+- **CPU compatible**: Can be batched to CPU render farms
+
+## My other Nuke gizmos
+You maybe be interested on also Nuke Cattery nodes or gizmos. Feel free to check them out:
+
+### AI-powered nodes
+- **[RIFE for Nuke](https://github.com/rafaelperez/RIFE-for-Nuke)**: Advanced AI-driven retiming and optical flow
+- **[SegmentAnything for Nuke](https://github.com/rafaelperez/Segment-Anything-for-Nuke)**: Cutting-edge AI object segmentation
+- **[VITMatte for Nuke](https://github.com/rafaelperez/ViTMatte-for-Nuke):** AI-powered natural edge detail extraction
+
+### Advanced effects
+- **[Guided Blur/Refine Edge](https://www.nukepedia.com/gizmos/filter/guided-blur-refine-edge):** High-speed edge detail extraction using BlinkScript
 
 ## Compatibility
 
@@ -40,13 +53,13 @@ Simply connect an input image to the **Depth Anything** node. Further controls a
 
 ## Pre-trained models
 
-The current release only includes the **Large** model, which is the only one that's suitable for visual effects work. However, the other models can be converted to `.cat` format by following the **compilation** steps below.
+The current release includes the **V2_Small** model, which is the best commercially allowed model according to the original project's licensing terms. However, more capable models can be converted to `.cat` format by following the **compilation** steps below.
 
 | Model | Params | Model Size | Inference Time on Nuke 13 | Nuke 14 |
 |:-|-:|:-:|:-:|:-:|
-| Depth-Anything-Small | 24.8M | - | - | - |
-| Depth-Anything-Base | 97.5M | - | - | - |
-| **Depth-Anything-Large** | 335.3M | 1.2Gb | - | - |
+| **Depth-Anything_V2-Small** | 24.8M | - | - | - |
+| Depth-Anything_V2-Base | 97.5M | - | - | - |
+| Depth-Anything_V2-Large | 335.3M | 1.2Gb | - | - |
 
 > *Tests under Rocky Linux 8, AMD Ryzen Threadripper 3960X 24-Core, NVidia GeForce RTX 3090.*
 
@@ -86,25 +99,37 @@ For more information on selecting the appropriate Python, PyTorch, and CUDA comb
 
 ## License and Acknowledgments
 
-**DepthAnything.cat** is licensed under the MIT License, and is derived from https://github.com/LiheYoung/Depth-Anything.
+This repository, **DepthAnything.cat** is licensed under the MIT License, and is derived from https://github.com/LiheYoung/Depth-Anything and https://github.com/DepthAnything/Depth-Anything-V2.
+
+> **IMPORTANT**: DepthAnything original project pre-trained have different licenses. **As of July 7, 2024**:
+> - Depth-Anything-V1-models are under the Apache-2.0 license. 
+> - Depth-Anything-V2-Small model is under the Apache-2.0 license. 
+> - Depth-Anything-V2-Base/Large/Giant models are under the CC-BY-NC-4.0 license.  
 
 While the MIT License permits commercial use of **Depth Anything**, the dataset used for its training may be under a non-commercial license.
 
 This license **does not cover** the underlying pre-trained model, associated training data, and dependencies, which may be subject to further usage restrictions.
 
-Consult https://github.com/LiheYoung/Depth-Anything for more information on associated licensing terms.
+**Always refer to** https://github.com/LiheYoung/Depth-Anything and https://github.com/DepthAnything/Depth-Anything-V2 for the most up-to-date information on associated licensing terms.
 
-**Users are solely responsible for ensuring that the underlying model, training data, and dependencies align with their intended usage of RIFE.cat.**
+> **Users are solely responsible for ensuring that the underlying model, training data, and dependencies align with their intended usage of DepthAnything.cat.**
 
 ## Citation
 
 If you find this project useful, please consider citing:
 
 ```bibtex
-@inproceedings{depthanything,
-      title={Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data}, 
-      author={Yang, Lihe and Kang, Bingyi and Huang, Zilong and Xu, Xiaogang and Feng, Jiashi and Zhao, Hengshuang},
-      booktitle={CVPR},
-      year={2024}
+@article{depth_anything_v2,
+  title={Depth Anything V2},
+  author={Yang, Lihe and Kang, Bingyi and Huang, Zilong and Zhao, Zhen and Xu, Xiaogang and Feng, Jiashi and Zhao, Hengshuang},
+  journal={arXiv:2406.09414},
+  year={2024}
+}
+
+@inproceedings{depth_anything_v1,
+  title={Depth Anything: Unleashing the Power of Large-Scale Unlabeled Data}, 
+  author={Yang, Lihe and Kang, Bingyi and Huang, Zilong and Xu, Xiaogang and Feng, Jiashi and Zhao, Hengshuang},
+  booktitle={CVPR},
+  year={2024}
 }
 ```

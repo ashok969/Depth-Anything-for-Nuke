@@ -11,7 +11,6 @@
 from typing import Callable, Optional, Tuple, Union
 
 from torch import Tensor
-import torch
 import torch.nn as nn
 
 
@@ -69,9 +68,6 @@ class PatchEmbed(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         _, _, H, W = x.shape
-
-        if x.dtype == torch.float32:
-            x = x.half()
 
         patch_H, patch_W = self.patch_size
 

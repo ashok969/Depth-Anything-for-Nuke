@@ -173,40 +173,32 @@ class DepthAnythingV2(nn.Module):
         use_clstoken=False
     ):
         super(DepthAnythingV2, self).__init__()
-
-        self.intermediate_layer_idx = {
+        self.encoders = {
             'vits': [2, 5, 8, 11],
             'vitb': [2, 5, 8, 11], 
             'vitl': [4, 11, 17, 23], 
             'vitg': [9, 19, 29, 39]
         }
-
-        self.encoder = encoder
+        self.n = self.encoders[encoder]
         self.pretrained = DINOv2(model_name=encoder)
-
         self.depth_head = DPTHead(self.pretrained.embed_dim, features, use_bn, out_channels=out_channels, use_clstoken=use_clstoken)
 
     def forward(self, x):
         patch_h, patch_w = x.shape[-2] // 14, x.shape[-1] // 14
-
-        features = self.pretrained.get_intermediate_layers(x, self.intermediate_layer_idx[self.encoder], return_class_token=True)
-
+        features = self.pretrained.get_intermediate_layers(x, self.n, return_class_token=True)
         depth = self.depth_head(features, patch_h, patch_w)
         depth = F.relu(depth)
-
         return depth.squeeze(1)
 
     @torch.no_grad()
     def infer_image(self, raw_image, input_size=518):
         image, (h, w) = self.image2tensor(raw_image, input_size)
-
         depth = self.forward(image)
-
         depth = F.interpolate(depth[:, None], (h, w), mode="bilinear", align_corners=True)[0, 0]
-
         return depth
 
     def image2tensor(self, raw_image, input_size=518):        
+        DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
         transform = Compose([
             Resize(
                 width=input_size,
@@ -222,13 +214,8 @@ class DepthAnythingV2(nn.Module):
         ])
 
         h, w = raw_image.shape[:2]
-
         image = cv2.cvtColor(raw_image, cv2.COLOR_BGR2RGB) / 255.0
-
         image = transform({'image': image})['image']
         image = torch.from_numpy(image).unsqueeze(0)
-
-        DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
         image = image.to(DEVICE)
-
         return image, (h, w)
