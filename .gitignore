@@ -19,3 +19,6 @@
 
 # Build files
 .build/
+
+# PyCharm settings
+.idea/
