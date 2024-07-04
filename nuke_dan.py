@@ -83,15 +83,16 @@ transform = Compose(
 )
 
 
-def build_depth_anything_model(version: str, model_size: str, half=False):
+def build_depth_anything_model(version: str, model_size: str, use_half=False):
     """Load the DepthAnythingV1 model.
 
     Models will be downloaded from the Hugging Face Hub
     https://huggingface.co/spaces/LiheYoung/Depth-Anything/tree/main
 
     Args:
+        version: The DepthAnything version (v1, v2).
         model_size: The depth_anything model_size (vits, vitb, vitl).
-        half: Whether to use half precision.
+        use_half: Whether to use half precision.
 
     Returns
         torch.nn.Module: The DepthAnythingV1 model
@@ -116,7 +117,7 @@ def build_depth_anything_model(version: str, model_size: str, half=False):
     state_dict = torch.load(model_file, map_location="cpu")
     model.load_state_dict(state_dict)
 
-    if half:
+    if use_half:
         model = model.half()
     return model.to(DEVICE).eval()
 
@@ -127,12 +128,15 @@ def file_size(file_path):
     return int(size_in_bytes / (1024 * 1024))
 
 
-def test_model(image_path, model, version: str, model_size: str, half=False):
+def test_model(image_path, model, version: str, model_size: str, use_half=False):
     """Test the model with an image.
 
     Args:
-        model: The model to test.
         image_path: The path to the image.
+        model: The model to test.
+        version: The DepthAnything version (v1, v2).
+        model_size: The depth_anything model_size (vits, vitb, vitl).
+        use_half: Whether to use half precision.
     """
     LOGGER.info("Testing model with image: %s", image_path)
 
@@ -144,7 +148,7 @@ def test_model(image_path, model, version: str, model_size: str, half=False):
     image = transform({"image": image})["image"]
     image = torch.from_numpy(image).unsqueeze(0).to(DEVICE)
 
-    if half:
+    if use_half:
         image = image.half()
 
     with torch.no_grad():
@@ -156,7 +160,7 @@ def test_model(image_path, model, version: str, model_size: str, half=False):
     depth = depth.astype("uint8")
     depth = cv2.applyColorMap(depth, cv2.COLORMAP_JET)
 
-    dest = f"depth_{version}_{model_size}_{'fp16' if half else 'fp32'}_{os.urandom(2).hex()}.png"
+    dest = f"depth_{version}_{model_size}_{'fp16' if use_half else 'fp32'}_{os.urandom(2).hex()}.png"
     cv2.imwrite(dest, depth)
     LOGGER.info("Test image saved to %s", dest)
 
@@ -170,13 +174,13 @@ class DepthAnythingNuke(nn.Module):
         n: Depth Anything window list parameter.
     """
 
-    def __init__(self, encoder, decoder, n: List[int], half=False) -> None:
+    def __init__(self, encoder, decoder, n: List[int], use_half=False) -> None:
         """Initialize the model."""
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.n = n
-        self.half = half
+        self.use_half = use_half
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         n = self.n
@@ -212,31 +216,32 @@ class DepthAnythingNuke(nn.Module):
         return depth[:, :, :h, :w]
 
 
-def trace_depth_anything(version: str, model_size: str, half=False):
+def trace_depth_anything(version: str, model_size: str, use_half=False):
     """Trace the DepthAnythingV2 model.
 
     Returns
         torch.jit.ScriptModule: The traced model.
     """
     LOGGER.info(
-        "Tracing DepthAnything: %s_%s %s", version, model_size, "(half)" if half else ""
+        "Tracing DepthAnything: %s_%s %s", version, model_size, "(half)" if use_half else ""
     )
 
-    depth_anything_model = build_depth_anything_model(version, model_size, half)
+    depth_anything_model = build_depth_anything_model(version, model_size, use_half)
 
     model = DepthAnythingNuke(
         encoder=depth_anything_model.pretrained,
         decoder=depth_anything_model.depth_head,
         n=depth_anything_model.n,
-        half=half,
+        use_half=use_half,
     )
+    model = model.half()
     model_traced = torch.jit.script(model)
 
     if IS_TORCH_1_12:
         model_traced = torch.jit.optimize_for_inference(model_traced)
 
     DEST = (
-        f"{BASE_PATH}/DepthAnything_{version}_{model_size}{'_half' if half else ''}.pt"
+        f"{BASE_PATH}/DepthAnything_{version}_{model_size}{'_half' if use_half else ''}.pt"
     )
     model_traced.save(DEST)
     LOGGER.info("TorchScript model saved to %s (%sMB)", DEST, file_size(DEST))
@@ -272,4 +277,4 @@ if __name__ == "__main__":
 
     # model = depth_anything_model(args.version, args.model_size, args.half)
     model = trace_depth_anything(args.version, args.model_size, args.half)
-    test_model(args.test_image, model, args.version, args.model_size, args.half)
+    # test_model(args.test_image, model, args.version, args.model_size, args.half)
