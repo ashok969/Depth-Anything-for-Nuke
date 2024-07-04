@@ -1,11 +1,11 @@
 
-# Depth Anything for Nuke
+# Depth Anything V2 for Nuke
 
 ## Introduction
 
 Introducing **Depth Anything** for **The Foundry's Nuke**. This project brings state-of-the-art **depth map** generation to your favorite compositing software.
 
-**Depth Anything** is a neural network that creates accurate depth maps from single images, handling a wide range of subjects.
+**Depth Anything (V2)** is a neural network that creates accurate depth maps from single images, handling a wide range of subjects.
 
 This tool is **natively integrated** within Nuke, providing a seamless and streamlined experience. It requires no external dependencies or complicated setup, enabling artists to leverage the cutting-edge AI model in their familiar workflow.
 
@@ -22,13 +22,13 @@ https://github.com/rafaelperez/Depth-Anything-for-Nuke/assets/1684365/e3bc47eb-a
 
 - **Simple interface**: No 3D tracking setup required
 - **High detail**: Captures relatively difficult edges
-- **Efficient memory usage**: Runs on most 6GB graphics cards
+- **Efficient memory usage**: Downrez option allows good results on most 6GB graphics cards
 - **CPU compatible**: Can be batched to CPU render farms
 
 ## My other Nuke gizmos
-You maybe be interested on also Nuke Cattery nodes or gizmos. Feel free to check them out:
+You may also be interested in my other Nuke Cattery nodes or gizmos. Feel free to check them out:
 
-### AI-powered nodes
+### ✨ AI-powered nodes
 - **[RIFE for Nuke](https://github.com/rafaelperez/RIFE-for-Nuke)**: Advanced AI-driven retiming and optical flow
 - **[SegmentAnything for Nuke](https://github.com/rafaelperez/Segment-Anything-for-Nuke)**: Cutting-edge AI object segmentation
 - **[VITMatte for Nuke](https://github.com/rafaelperez/ViTMatte-for-Nuke):** AI-powered natural edge detail extraction
@@ -46,10 +46,47 @@ You maybe be interested on also Nuke Cattery nodes or gizmos. Feel free to check
 2. Copy the extracted `Cattery` folder to `.nuke` or your plugins path.
 3. In the toolbar, choose **Cattery > Update** or simply **restart** Nuke.
 
-**Depth Anything** will then be accessible under the toolbar at **Cattery > Segmentation > Depth Anything**.
+**Depth Anything V2** will then be accessible under the toolbar at **Cattery > Depth Estimation > DepthAnythingV2**.
+
+### 🐾 Extra Steps for Nuke 13
+
+4. Add the path for ***Depth Anything V2** to your `init.py`:
+``` py
+import nuke
+nuke.pluginAddPath('./Cattery/DepthAnythingV2')
+```
+5. Add an menu item to the toolbar in your `menu.py`:
+
+``` py
+import nuke
+toolbar = nuke.menu("Nodes")
+toolbar.addCommand('Cattery/Depth Estimation/DepthAnythingV2', 'nuke.createNode("DepthAnythingV2")', icon="DepthAnythingV2.png")
+```
 
 ## Quick Start
-Simply connect an input image to the **Depth Anything** node. Further controls and options will be added soon.
+Connect an input image to the **Depth Anything** node. If necessary, adjust the **Near** and **Far** depth values to scale the Z-depth values accordingly.
+
+
+## Options
+
+<img src="https://github.com/rafaelperez/Depth-Anything-for-Nuke/assets/1684365/508733c2-f3ab-479d-bc24-b73331ed7900" width="640">
+
+- **Use GPU if available:** Utilize GPU acceleration when possible.
+
+- **Bypass sRGB Conversion:**  Skips sRGB color space conversion for input images.
+
+- **View:** Selects the output display mode:
+  - **Preview (False Color):** Displays the depth map in false colors for easy visualization.
+  - **Final Output:** Output the Z-depth channel into the original input.
+
+- **Downrez:** Reduces the resolution of the input image to optimize memory usage and processing speed.
+
+- **Far:** Sets the maximum depth value in the scene, representing the farthest objects.
+
+- **Near:** Defines the minimum depth value, corresponding to the closest objects in the scene.
+
+- **Invert Map:** Reverses the depth values, making near objects appear far and vice versa.
+
 
 ## Pre-trained models
 
@@ -83,13 +120,21 @@ Fortunately, Nvidia offers Docker images tailored for various GPUs. The Docker i
 
 Access to these images requires registration on [Nvidia's NGC Catalog](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch).
 
-Once Docker is installed on your system, execute the following command to initiate a terminal within the required environment. You can then clone the repository and run `python sam_nuke.py` to compile the model.
+Once **Docker** is installed on your system, execute the following command to initiate a terminal within the required environment. You can then clone the repository and run `python nuke_dan.py` to compile the model.
 
 ```sh
 docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:20.07-py3
 git clone https://github.com/rafaelperez/Depth-Anything-for-Nuke.git
 cd Depth-Anything-for-Nuke
+
+# Compiles the default model, V2 small, half precision.
 python nuke_dan.py
+
+# Compiles the V2 large model, half precision.
+python nuke_dan.py --version v2 --model-size vitl --half
+
+# Check the available models and options with
+python nuke_dan.py --help
 ```
 For projects targeting **Nuke 14+**, which requires **PyTorch 1.12**, you can use the following Docker image, version **22.05**:
 
@@ -99,12 +144,13 @@ For more information on selecting the appropriate Python, PyTorch, and CUDA comb
 
 ## License and Acknowledgments
 
-This repository, **DepthAnything.cat** is licensed under the MIT License, and is derived from https://github.com/LiheYoung/Depth-Anything and https://github.com/DepthAnything/Depth-Anything-V2.
+This repository, **DepthAnythingV2.cat** is licensed under the MIT License, and is derived from https://github.com/LiheYoung/Depth-Anything and https://github.com/DepthAnything/Depth-Anything-V2.
 
-> **IMPORTANT**: DepthAnything original project pre-trained have different licenses. **As of July 7, 2024**:
-> - Depth-Anything-V1-models are under the Apache-2.0 license. 
-> - Depth-Anything-V2-Small model is under the Apache-2.0 license. 
-> - Depth-Anything-V2-Base/Large/Giant models are under the CC-BY-NC-4.0 license.  
+> [!IMPORTANT]
+> DepthAnything original project pre-trained have different licenses. **As of July 7, 2024**:
+> - Depth-Anything-V1-models are under the Apache-2.0 license (commercial use allowed). 
+> - Depth-Anything-V2-Small model is under the Apache-2.0 license (commercial use allowed). 
+> - Depth-Anything-V2-Base/Large/Giant models are under the CC-BY-NC-4.0 license. (commercial use **not** allowed).  
 
 While the MIT License permits commercial use of **Depth Anything**, the dataset used for its training may be under a non-commercial license.
 
@@ -112,7 +158,8 @@ This license **does not cover** the underlying pre-trained model, associated tra
 
 **Always refer to** https://github.com/LiheYoung/Depth-Anything and https://github.com/DepthAnything/Depth-Anything-V2 for the most up-to-date information on associated licensing terms.
 
-> **Users are solely responsible for ensuring that the underlying model, training data, and dependencies align with their intended usage of DepthAnything.cat.**
+> [!WARNING]
+> **Users are solely responsible** for ensuring that the underlying model, training data, and dependencies align with their intended usage of DepthAnything.cat.
 
 ## Citation
 
