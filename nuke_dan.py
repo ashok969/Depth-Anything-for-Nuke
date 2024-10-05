@@ -18,7 +18,7 @@ from v2.dpt import DepthAnythingV2
 logging.basicConfig(level=logging.INFO)
 
 LOGGER = logging.getLogger(__name__)
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 BASE_PATH = "./nuke/Cattery/DepthAnything"
 IS_TORCH_1_12 = version.parse(torch.__version__) >= version.parse("1.12.0")
 MODEL_CONFIG = {
@@ -185,8 +185,7 @@ class DepthAnythingNuke(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         n = self.n
         b, c, h, w = x.shape
-        device = torch.device("cuda") if x.is_cuda else torch.device("cpu")
-
+        device = torch.device("cuda") if x.is_cuda else torch.device("mps") if "mps" in str(x.device) else torch.device("cpu")
         # Padding
         padding_factor = 14
         pad_h = ((h - 1) // padding_factor + 1) * padding_factor

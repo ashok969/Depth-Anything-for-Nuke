@@ -22,3 +22,5 @@
 
 # PyCharm settings
 .idea/
+
+.DS_Store
